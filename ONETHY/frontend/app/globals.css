@@ -1,0 +1,151 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, :root { height: 100%; }
+body { @apply bg-bg text-text; }
+
+/* Componentes base com animações */
+.card { 
+  @apply bg-bg-card rounded-3xl shadow-soft border border-slate-800 
+  hover:shadow-lg transition-all duration-300 hover:border-slate-700; 
+}
+
+.btn { 
+  @apply inline-flex items-center justify-center rounded-xl px-6 py-3 text-sm font-semibold 
+  transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/50 
+  disabled:opacity-50 disabled:pointer-events-none active:scale-95; 
+}
+
+.btn-primary { 
+  @apply bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-lg 
+  hover:from-emerald-400 hover:to-emerald-500 hover:shadow-xl hover:-translate-y-0.5; 
+}
+
+.btn-secondary { 
+  @apply bg-slate-800 text-text hover:bg-slate-700 border border-slate-700 
+  hover:border-slate-600; 
+}
+
+.btn-ghost { 
+  @apply bg-transparent hover:bg-slate-800 text-text-muted hover:text-white; 
+}
+
+.btn-danger { 
+  @apply bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg 
+  hover:from-red-400 hover:to-red-500 hover:shadow-xl hover:-translate-y-0.5; 
+}
+
+.input { 
+  @apply bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-3 text-sm 
+  placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 
+  focus:border-emerald-500 w-full transition-all duration-200; 
+}
+
+.badge { 
+  @apply inline-flex items-center rounded-full px-3 py-1 text-xs font-medium 
+  bg-slate-800 text-text-muted border border-slate-700; 
+}
+
+/* Animações personalizadas */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(34, 197, 94, 0.2); }
+  50% { box-shadow: 0 0 20px rgba(34, 197, 94, 0.4); }
+}
+
+.animate-float { animation: float 6s ease-in-out infinite; }
+.animate-glow { animation: glow 2s ease-in-out infinite; }
+
+/* Efeitos de hover personalizados */
+.hover-lift {
+  @apply transition-transform duration-300 hover:-translate-y-1 hover:shadow-xl;
+}
+
+.hover-scale {
+  @apply transition-transform duration-200 hover:scale-105;
+}
+
+/* Scrollbar personalizada */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { @apply bg-slate-800; }
+::-webkit-scrollbar-thumb { @apply bg-slate-600 rounded-full; }
+::-webkit-scrollbar-thumb:hover { @apply bg-slate-500; }
+
+/* Gradientes de fundo */
+.gradient-bg {
+  background: linear-gradient(135deg, #0b0f14 0%, #1a1f2e 50%, #0b0f14 100%);
+}
+
+.gradient-card {
+  background: linear-gradient(145deg, #121821 0%, #1a1f2e 100%);
+}
+
+/* Additional Animations */
+@keyframes slide-right {
+  from { 
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+.animate-slide-right { animation: slide-right 0.6s ease-out both; }
+.animate-float { animation: float 3s ease-in-out infinite; }
+.animate-fade-in-delay { animation: fade-in 1s ease-out 0.5s both; }
+
+/* Enhanced scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #64748b;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Glass morphism effect */
+.backdrop-blur-xl {
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+/* Custom focus states */
+input:focus, button:focus {
+  outline: none;
+}
+
+/* Smooth transitions */
+* {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Dash animation for flow lines */
+@keyframes dash {
+  0% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: 25; }
+}
+
+.animate-dash {
+  animation: dash 2s linear infinite;
+}

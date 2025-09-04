@@ -1,0 +1,909 @@
+"use client"
+import Shell from '@/components/Shell'
+import ProtectedRoute from '@/components/ProtectedRoute'
+import { EmptyState, Badge } from '@/components/UI'
+import { InboxIcon, WhatsappIcon } from '@/components/Icons'
+import { useEffect, useMemo, useState } from 'react'
+import { useAuth } from '@/lib/auth'
+
+// Conversa recebida da API
+type ApiConversation = {
+  id: number
+  status: string
+  lastMessage: string | null
+  lastActivity: string
+  unreadCount: number
+  contact: { id: number; name: string; phone: string; email: string | null }
+  _count?: { messages: number }
+}
+
+type Message = {
+  id: string
+  content: string
+  timestamp: Date
+  fromMe: boolean
+  type: 'text' | 'image' | 'audio' | 'document'
+}
+
+export default function InboxPage() {
+  const { token } = useAuth()
+  const [conversations, setConversations] = useState<ApiConversation[]>([])
+  const [selectedConversation, setSelectedConversation] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [message, setMessage] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [messages, setMessages] = useState<Message[]>([])
+  const [showContactInfo, setShowContactInfo] = useState(false)
+  const [activeFilter, setActiveFilter] = useState<'all' | 'mine' | 'unassigned' | 'open' | 'pending' | 'resolved'>('all')
+  const [selectedLabels, setSelectedLabels] = useState<string[]>([])
+  const [showNotes, setShowNotes] = useState(false)
+  const [showConversationInfo, setShowConversationInfo] = useState(false)
+  const [newNote, setNewNote] = useState('')
+  const [conversationNotes, setConversationNotes] = useState<Array<{
+    id: number
+    content: string
+    isPrivate: boolean
+    author: string
+    createdAt: string
+  }>>([])
+  const [isPrivateNote, setIsPrivateNote] = useState(true)
+  const [expandedSections, setExpandedSections] = useState<{ [key: string]: boolean }>({
+    actions: true,
+    macros: false,
+    conversation: false,
+    contact: false,
+    previousConversations: false,
+    participants: false,
+    notes: false
+  })
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }))
+  }
+
+  // Filtra conversas baseado na busca
+  const filteredConversations = useMemo(() => {
+    if (!searchQuery) return conversations
+    return conversations.filter(conv =>
+      conv.contact.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      conv.contact.phone?.includes(searchQuery) ||
+      conv.lastMessage?.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+  }, [conversations, searchQuery])
+
+  // Conversa selecionada
+  const selected = conversations.find(c => c.id.toString() === selectedConversation)
+
+  useEffect(() => {
+    // Simula carregamento das conversas
+    const mockConversations: ApiConversation[] = [
+      {
+        id: 1,
+        status: 'open',
+        lastMessage: 'Olá! Como posso ajudar?',
+        lastActivity: new Date().toISOString(),
+        unreadCount: 2,
+        contact: {
+          id: 1,
+          name: 'EvolutionAPI',
+          phone: '+5511999999999',
+          email: null
+        }
+      }
+    ]
+    
+    setTimeout(() => {
+      setConversations(mockConversations)
+      setLoading(false)
+    }, 1000)
+
+    // Mensagens de exemplo
+    setMessages([
+      {
+        id: '1',
+        content: 'Olá! Como posso ajudar você hoje?',
+        timestamp: new Date(Date.now() - 300000),
+        fromMe: false,
+        type: 'text'
+      },
+      {
+        id: '2',
+        content: 'Oi! Gostaria de saber mais sobre os seus serviços.',
+        timestamp: new Date(Date.now() - 120000),
+        fromMe: true,
+        type: 'text'
+      }
+    ])
+  }, [])
+
+  const sendMessage = () => {
+    if (!message.trim() || !selected) return
+
+    const newMessage: Message = {
+      id: Date.now().toString(),
+      content: message,
+      timestamp: new Date(),
+      fromMe: true,
+      type: 'text'
+    }
+    
+    setMessages(prev => [...prev, newMessage])
+    setMessage('')
+  }
+
+  return (
+    <ProtectedRoute>
+      <Shell>
+        <div className="h-full flex">
+          {/* Sidebar de Conversas */}
+          <div className="w-80 bg-bg-card border-r border-slate-800 flex flex-col">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-800">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-white">Conversas</h2>
+                <div className="flex items-center gap-2">
+                  <button className="btn btn-ghost p-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                  <button className="btn btn-ghost p-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Filtros com Badges */}
+              <div className="flex flex-wrap gap-1 mb-4">
+                {[
+                  { key: 'all', label: 'Todas', count: conversations.length },
+                  { key: 'mine', label: 'Minhas', count: Math.floor(conversations.length * 0.6) },
+                  { key: 'unassigned', label: 'Não atribuídas', count: Math.floor(conversations.length * 0.2) },
+                  { key: 'open', label: 'Abertas', count: Math.floor(conversations.length * 0.7) },
+                  { key: 'pending', label: 'Pendentes', count: Math.floor(conversations.length * 0.1) }
+                ].map(filter => (
+                  <button
+                    key={filter.key}
+                    className={`btn btn-sm text-xs ${
+                      activeFilter === filter.key ? 'btn-primary' : 'btn-ghost'
+                    }`}
+                    onClick={() => setActiveFilter(filter.key as any)}
+                  >
+                    {filter.label} ({filter.count})
+                  </button>
+                ))}
+              </div>
+
+              {/* Search Bar */}
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Buscar conversas..."
+                  className="input w-full pl-10 text-sm"
+                />
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Lista de Conversas */}
+            <div className="flex-1 overflow-y-auto">
+              {loading ? (
+                <div className="p-4 space-y-3">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="flex items-center gap-3 animate-pulse">
+                      <div className="w-12 h-12 bg-slate-700 rounded-full" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-3 bg-slate-700 rounded w-3/4" />
+                        <div className="h-2 bg-slate-700 rounded w-1/2" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : filteredConversations.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState
+                    icon={<InboxIcon className="w-8 h-8" />}
+                    title="Nenhuma conversa encontrada"
+                    description={searchQuery ? 'Tente ajustar os termos de busca' : 'Todas as conversas foram carregadas'}
+                  />
+                </div>
+              ) : (
+                <div>
+                  {filteredConversations.map(conv => (
+                    <div
+                      key={conv.id}
+                      onClick={() => setSelectedConversation(conv.id.toString())}
+                      className={`p-4 cursor-pointer transition-all duration-200 border-b border-slate-800/50 hover:bg-slate-800/30 ${
+                        selectedConversation === conv.id.toString() ? 'bg-emerald-500/10 border-l-4 border-l-emerald-500' : ''
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="relative">
+                          <div className="w-12 h-12 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center text-white font-semibold">
+                            <WhatsappIcon className="w-6 h-6" />
+                          </div>
+                          {conv.unreadCount > 0 && (
+                            <div className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center text-xs text-white font-medium animate-pulse">
+                              {conv.unreadCount}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-medium text-white truncate">{conv.contact.name}</h4>
+                            <div className="flex items-center gap-2">
+                              <Badge variant={conv.status === 'open' ? 'success' : 'default'}>
+                                {conv.status === 'open' ? 'Aberto' : 'Fechado'}
+                              </Badge>
+                              <span className="text-xs text-slate-400">3d</span>
+                            </div>
+                          </div>
+                          <p className="text-sm text-text-muted truncate mt-1">{conv.lastMessage || 'Sem mensagens'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Área Principal */}
+          <div className="flex-1 flex flex-col bg-bg">
+            {selected ? (
+              <>
+                {/* Header do Chat */}
+                <div className="h-16 bg-bg-card border-b border-slate-800 flex items-center justify-between px-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center text-white font-semibold">
+                      <WhatsappIcon className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-white">{selected.contact.name}</h3>
+                      <p className="text-xs text-text-muted">Online • {selected.contact.phone}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button className="btn btn-ghost p-2">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                      </svg>
+                    </button>
+                    <button className="btn btn-ghost p-2">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                      </svg>
+                    </button>
+                    <button 
+                      onClick={() => setShowContactInfo(!showContactInfo)}
+                      className={`btn p-2 ${showContactInfo ? 'btn-primary' : 'btn-ghost'}`}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </button>
+                    <button 
+                      onClick={() => setShowConversationInfo(!showConversationInfo)}
+                      className={`btn p-2 ${showConversationInfo ? 'btn-primary' : 'btn-ghost'}`}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </button>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 flex">
+                  {/* Área de Mensagens */}
+                  <div className="flex-1 flex flex-col">
+                    {/* Mensagens */}
+                    <div className="flex-1 overflow-y-auto p-6 bg-bg">
+                      <div className="space-y-4">
+                        {messages.map(msg => (
+                          <div key={msg.id} className={`flex ${msg.fromMe ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${
+                              msg.fromMe 
+                                ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-br-sm shadow-lg' 
+                                : 'bg-bg-card text-slate-200 rounded-bl-sm border border-slate-800'
+                            }`}>
+                              <p className="text-sm">{msg.content}</p>
+                              <p className={`text-xs mt-1 ${msg.fromMe ? 'text-emerald-100' : 'text-slate-400'}`}>
+                                {msg.timestamp.toLocaleString('pt-BR', { 
+                                  day: '2-digit',
+                                  month: 'short',
+                                  hour: '2-digit', 
+                                  minute: '2-digit' 
+                                })}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Footer da Conversa */}
+                    <div className="conversation-footer bg-bg border-t border-slate-700 p-4">
+                      {/* Toggle entre Responder e Mensagem Privada */}
+                      <div className="flex justify-between h-[3.25rem] gap-2 mb-2">
+                        <div className="flex items-center">
+                          <div className="flex items-center w-auto h-8 p-1 transition-all border rounded-full bg-slate-800 border-slate-600 group relative duration-300 ease-in-out z-0 mt-3">
+                            <div className="flex items-center gap-1 px-2 z-20 text-sm">
+                              <button className="text-text hover:text-white transition-colors">Responder</button>
+                            </div>
+                            <div className="flex items-center gap-1 px-2 z-20 text-sm">
+                              <button className="text-text-muted hover:text-white transition-colors">Mensagem Privada</button>
+                            </div>
+                            <div className="absolute shadow-sm rounded-full h-6 w-[87px] transition-all duration-300 ease-in-out translate-x-0 bg-emerald-500"></div>
+                          </div>
+                        </div>
+                        <div className="flex items-center mx-4 my-0">
+                          {/* Spacer */}
+                        </div>
+                        <button className="text-text-muted hover:text-white transition-all duration-200 ease-in-out border-0 rounded-lg outline-1 outline disabled:opacity-50 h-10 w-10 p-0 text-sm font-medium justify-center flex items-center">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                          </svg>
+                        </button>
+                      </div>
+
+                      {/* Área de texto */}
+                      <div className="reply-box__top mb-3">
+                        <textarea
+                          placeholder="Shift + enter para nova linha. Digite '/' para selecionar uma Resposta Pronta."
+                          rows={2}
+                          className="w-full p-3 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-text-muted resize-none focus:outline-none focus:border-emerald-500 transition-colors"
+                          value={message}
+                          onChange={(e) => setMessage(e.target.value)}
+                          style={{ minHeight: '64px' }}
+                        />
+                      </div>
+
+                      {/* Controles inferiores */}
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          {/* Emoji */}
+                          <button className="inline-flex items-center justify-center w-8 h-8 p-0 text-sm transition-all duration-200 ease-in-out border-0 rounded-lg bg-slate-700 text-text hover:bg-slate-600 hover:text-white">
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zM8.5 9a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0zm7 0a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0zM12 17.5c-2.33 0-4.31-1.46-5.11-3.5h10.22c-.8 2.04-2.78 3.5-5.11 3.5z"/>
+                            </svg>
+                          </button>
+
+                          {/* Anexo */}
+                          <label className="inline-flex items-center justify-center w-8 h-8 p-0 text-sm transition-all duration-200 ease-in-out border-0 rounded-lg bg-slate-700 text-text hover:bg-slate-600 hover:text-white cursor-pointer">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                            </svg>
+                            <input
+                              type="file"
+                              id="conversationAttachment"
+                              className="hidden"
+                              accept="image/*,audio/*,video/*,.3gpp,text/csv,text/plain,application/json,application/pdf,text/rtf,application/zip,application/x-7z-compressed,application/vnd.rar,application/x-tar,application/msword,application/vnd.ms-excel,application/vnd.ms-powerpoint,application/vnd.oasis.opendocument.text,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                              multiple
+                            />
+                          </label>
+
+                          {/* Microfone */}
+                          <button className="inline-flex items-center justify-center w-8 h-8 p-0 text-sm transition-all duration-200 ease-in-out border-0 rounded-lg bg-slate-700 text-text hover:bg-slate-600 hover:text-white">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                            </svg>
+                          </button>
+
+                          {/* Citação */}
+                          <button className="inline-flex items-center justify-center w-8 h-8 p-0 text-sm transition-all duration-200 ease-in-out border-0 rounded-lg bg-slate-700 text-text hover:bg-slate-600 hover:text-white">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                            </svg>
+                          </button>
+
+                          {/* Assinatura */}
+                          <button className="inline-flex items-center justify-center w-8 h-8 p-0 text-sm transition-all duration-200 ease-in-out border-0 rounded-lg bg-slate-700 text-text hover:bg-slate-600 hover:text-white">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          </button>
+
+                          {/* IA */}
+                          <div className="relative">
+                            <button className="inline-flex items-center gap-2 px-3 h-8 text-sm transition-all duration-200 ease-in-out border-0 rounded-lg bg-emerald-500 text-white hover:brightness-110 focus-visible:brightness-110">
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                              </svg>
+                              <span className="min-w-0 truncate">Inteligência Artificial</span>
+                            </button>
+                            {/* Indicador de ping */}
+                            <div className="absolute top-0 right-0 -mt-1 -mr-1 rounded-full w-3 h-3 bg-emerald-400 animate-ping"></div>
+                            <div className="absolute top-0 right-0 -mt-1 -mr-1 rounded-full w-3 h-3 bg-emerald-400 opacity-50"></div>
+                          </div>
+                        </div>
+
+                        {/* Botão Enviar */}
+                        <div className="flex items-center">
+                          <button
+                            type="submit"
+                            className="flex-shrink-0 inline-flex items-center gap-2 px-3 h-8 text-sm transition-all duration-200 ease-in-out border-0 rounded-lg bg-emerald-500 text-white hover:brightness-110 focus-visible:brightness-110 disabled:opacity-50"
+                            disabled={!message.trim()}
+                            onClick={() => {
+                              if (message.trim()) {
+                                sendMessage()
+                              }
+                            }}
+                          >
+                            <span className="min-w-0 truncate">Enviar (⌘ + ↵)</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sidebar de Informações do Contato */}
+                  {showContactInfo && (
+                    <div className="w-80 bg-bg-card border-l border-slate-800 flex flex-col animate-slide-right">
+                      {/* Header */}
+                      <div className="p-6 border-b border-slate-800">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-semibold text-white">{selected.contact.name}</h3>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-emerald-400 rounded-full animate-pulse"></div>
+                            <span className="text-xs text-slate-400">{selected.contact.phone}</span>
+                          </div>
+                        </div>
+                        <p className="text-xs text-text-muted mt-1">Online agora</p>
+                      </div>
+
+                      {/* Seções */}
+                      <div className="flex-1 overflow-y-auto">
+                        <div className="flex flex-col gap-3 pb-8">
+                          {/* Ações da conversa */}
+                          <div className="px-2">
+                            <div className="text-sm">
+                              <button 
+                                onClick={() => toggleSection('actions')}
+                                className="flex items-center select-none w-full rounded-lg bg-slate-800/50 outline outline-1 outline-slate-700 justify-between py-2 px-4 hover:bg-slate-800/70 transition-colors"
+                              >
+                                <h5 className="text-white text-sm font-medium">Ações da conversa</h5>
+                                <div className="text-emerald-400">
+                                  <svg className={`w-4 h-4 transition-transform ${expandedSections.actions ? 'rotate-45' : ''}`} fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M11.883 3.007 12 3a1 1 0 0 1 .993.883L13 4v7h7a1 1 0 0 1 .993.883L21 12a1 1 0 0 1-.883.993L20 13h-7v7a1 1 0 0 1-.883.993L12 21a1 1 0 0 1-.993-.883L11 20v-7H4a1 1 0 0 1-.993-.883L3 12a1 1 0 0 1 .883-.993L4 11h7V4a1 1 0 0 1 .883-.993L12 3l-.117.007Z" />
+                                  </svg>
+                                </div>
+                              </button>
+                              {expandedSections.actions && (
+                                <div className="bg-bg-card outline outline-1 outline-slate-700 rounded-br-lg rounded-bl-lg p-4 mt-0 border-t-0">
+                                  <div className="space-y-4">
+                                    {/* Agente atribuído */}
+                                    <div>
+                                      <label className="text-xs text-slate-400 mb-1 block">Agente atribuído</label>
+                                      <select className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+                                        <option value="">Nenhum</option>
+                                        <option value="admin">Admin</option>
+                                        <option value="agent1">Agente 1</option>
+                                      </select>
+                                      <button className="text-emerald-400 hover:text-emerald-300 text-xs mt-1 transition-colors">
+                                        → Atribuir a mim
+                                      </button>
+                                    </div>
+
+                                    {/* Equipe atribuída */}
+                                    <div>
+                                      <label className="text-xs text-slate-400 mb-1 block">Equipe atribuída</label>
+                                      <select className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+                                        <option value="">Nenhum</option>
+                                        <option value="suporte">Suporte</option>
+                                        <option value="vendas">Vendas</option>
+                                      </select>
+                                    </div>
+
+                                    {/* Prioridade */}
+                                    <div>
+                                      <label className="text-xs text-slate-400 mb-1 block">Prioridade</label>
+                                      <select className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+                                        <option value="">Nenhuma</option>
+                                        <option value="baixa">Baixa</option>
+                                        <option value="media">Média</option>
+                                        <option value="alta">Alta</option>
+                                        <option value="urgente">Urgente</option>
+                                      </select>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Macros */}
+                          <div className="px-2">
+                            <div className="text-sm">
+                              <button 
+                                onClick={() => toggleSection('macros')}
+                                className="flex items-center select-none w-full rounded-lg bg-slate-800/50 outline outline-1 outline-slate-700 justify-between py-2 px-4 hover:bg-slate-800/70 transition-colors"
+                              >
+                                <h5 className="text-white text-sm font-medium">Macros</h5>
+                                <div className="text-emerald-400">
+                                  <svg className={`w-4 h-4 transition-transform ${expandedSections.macros ? 'rotate-45' : ''}`} fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M11.883 3.007 12 3a1 1 0 0 1 .993.883L13 4v7h7a1 1 0 0 1 .993.883L21 12a1 1 0 0 1-.883.993L20 13h-7v7a1 1 0 0 1-.883.993L12 21a1 1 0 0 1-.993-.883L11 20v-7H4a1 1 0 0 1-.993-.883L3 12a1 1 0 0 1 .883-.993L4 11h7V4a1 1 0 0 1 .883-.993L12 3l-.117.007Z" />
+                                  </svg>
+                                </div>
+                              </button>
+                              {expandedSections.macros && (
+                                <div className="bg-bg-card outline outline-1 outline-slate-700 rounded-br-lg rounded-bl-lg p-4 mt-0 border-t-0">
+                                  <div className="space-y-2">
+                                    <button className="w-full text-left text-sm text-text-muted hover:text-white p-2 rounded-lg hover:bg-slate-800/50 transition-colors">
+                                      📋 Informações da empresa
+                                    </button>
+                                    <button className="w-full text-left text-sm text-text-muted hover:text-white p-2 rounded-lg hover:bg-slate-800/50 transition-colors">
+                                      ⏰ Horário de funcionamento
+                                    </button>
+                                    <button className="w-full text-left text-sm text-text-muted hover:text-white p-2 rounded-lg hover:bg-slate-800/50 transition-colors">
+                                      🤝 Saudação inicial
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Informação da conversa */}
+                          <div className="px-2">
+                            <div className="text-sm">
+                              <button 
+                                onClick={() => toggleSection('conversation')}
+                                className="flex items-center select-none w-full rounded-lg bg-slate-800/50 outline outline-1 outline-slate-700 justify-between py-2 px-4 hover:bg-slate-800/70 transition-colors"
+                              >
+                                <h5 className="text-white text-sm font-medium">Informação da conversa</h5>
+                                <div className="text-emerald-400">
+                                  <svg className={`w-4 h-4 transition-transform ${expandedSections.conversation ? '' : 'rotate-45'}`} fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M3.997 13H20a1 1 0 1 0 0-2H3.997a1 1 0 1 0 0 2Z" />
+                                  </svg>
+                                </div>
+                              </button>
+                              {expandedSections.conversation && (
+                                <div className="bg-bg-card outline outline-1 outline-slate-700 rounded-br-lg rounded-bl-lg p-4 mt-0 border-t-0">
+                                  <div className="space-y-3">
+                                    <div>
+                                      <p className="text-xs text-text-muted">Status</p>
+                                      <Badge variant={selected.status === 'open' ? 'success' : 'default'}>
+                                        {selected.status === 'open' ? 'Aberta' : 'Fechada'}
+                                      </Badge>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-text-muted">Última atividade</p>
+                                      <p className="text-sm text-white">Há 3 minutos</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-text-muted">Mensagens não lidas</p>
+                                      <p className="text-sm text-white">{selected.unreadCount}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-text-muted">Canal</p>
+                                      <div className="flex items-center gap-2 mt-1">
+                                        <WhatsappIcon className="w-4 h-4 text-emerald-400" />
+                                        <span className="text-sm text-white">WhatsApp</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Atributos do contato */}
+                          <div className="px-2">
+                            <div className="text-sm">
+                              <button 
+                                onClick={() => toggleSection('contact')}
+                                className="flex items-center select-none w-full rounded-lg bg-slate-800/50 outline outline-1 outline-slate-700 justify-between py-2 px-4 hover:bg-slate-800/70 transition-colors"
+                              >
+                                <h5 className="text-white text-sm font-medium">Atributos do contato</h5>
+                                <div className="text-emerald-400">
+                                  <svg className={`w-4 h-4 transition-transform ${expandedSections.contact ? 'rotate-45' : ''}`} fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M11.883 3.007 12 3a1 1 0 0 1 .993.883L13 4v7h7a1 1 0 0 1 .993.883L21 12a1 1 0 0 1-.883.993L20 13h-7v7a1 1 0 0 1-.883.993L12 21a1 1 0 0 1-.993-.883L11 20v-7H4a1 1 0 0 1-.993-.883L3 12a1 1 0 0 1 .883-.993L4 11h7V4a1 1 0 0 1 .883-.993L12 3l-.117.007Z" />
+                                  </svg>
+                                </div>
+                              </button>
+                              {expandedSections.contact && (
+                                <div className="bg-bg-card outline outline-1 outline-slate-700 rounded-br-lg rounded-bl-lg p-4 mt-0 border-t-0">
+                                  <div className="space-y-3">
+                                    <div>
+                                      <p className="text-xs text-text-muted">Nome</p>
+                                      <p className="text-sm text-white">{selected.contact.name}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-text-muted">Telefone</p>
+                                      <p className="text-sm text-white">{selected.contact.phone}</p>
+                                    </div>
+                                    {selected.contact.email && (
+                                      <div>
+                                        <p className="text-xs text-text-muted">E-mail</p>
+                                        <p className="text-sm text-white">{selected.contact.email}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Conversas anteriores */}
+                          <div className="px-2">
+                            <div className="text-sm">
+                              <button 
+                                onClick={() => toggleSection('previousConversations')}
+                                className="flex items-center select-none w-full rounded-lg bg-slate-800/50 outline outline-1 outline-slate-700 justify-between py-2 px-4 hover:bg-slate-800/70 transition-colors"
+                              >
+                                <h5 className="text-white text-sm font-medium">Conversas anteriores</h5>
+                                <div className="text-emerald-400">
+                                  <svg className={`w-4 h-4 transition-transform ${expandedSections.previousConversations ? 'rotate-45' : ''}`} fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M11.883 3.007 12 3a1 1 0 0 1 .993.883L13 4v7h7a1 1 0 0 1 .993.883L21 12a1 1 0 0 1-.883.993L20 13h-7v7a1 1 0 0 1-.883.993L12 21a1 1 0 0 1-.993-.883L11 20v-7H4a1 1 0 0 1-.993-.883L3 12a1 1 0 0 1 .883-.993L4 11h7V4a1 1 0 0 1 .883-.993L12 3l-.117.007Z" />
+                                  </svg>
+                                </div>
+                              </button>
+                              {expandedSections.previousConversations && (
+                                <div className="bg-bg-card outline outline-1 outline-slate-700 rounded-br-lg rounded-bl-lg p-4 mt-0 border-t-0">
+                                  <div className="space-y-2">
+                                    <div className="bg-slate-800/30 rounded-lg p-3">
+                                      <p className="text-xs text-slate-400 mb-1">Há 1 semana</p>
+                                      <p className="text-sm text-white">Solicitação de suporte técnico</p>
+                                    </div>
+                                    <div className="bg-slate-800/30 rounded-lg p-3">
+                                      <p className="text-xs text-slate-400 mb-1">Há 2 semanas</p>
+                                      <p className="text-sm text-white">Interesse em produtos</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Participantes da conversa */}
+                          <div className="px-2">
+                            <div className="text-sm">
+                              <button 
+                                onClick={() => toggleSection('participants')}
+                                className="flex items-center select-none w-full rounded-lg bg-slate-800/50 outline outline-1 outline-slate-700 justify-between py-2 px-4 hover:bg-slate-800/70 transition-colors"
+                              >
+                                <h5 className="text-white text-sm font-medium">Participantes da conversa</h5>
+                                <div className="text-emerald-400">
+                                  <svg className={`w-4 h-4 transition-transform ${expandedSections.participants ? 'rotate-45' : ''}`} fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M11.883 3.007 12 3a1 1 0 0 1 .993.883L13 4v7h7a1 1 0 0 1 .993.883L21 12a1 1 0 0 1-.883.993L20 13h-7v7a1 1 0 0 1-.883.993L12 21a1 1 0 0 1-.993-.883L11 20v-7H4a1 1 0 0 1-.993-.883L3 12a1 1 0 0 1 .883-.993L4 11h7V4a1 1 0 0 1 .883-.993L12 3l-.117.007Z" />
+                                  </svg>
+                                </div>
+                              </button>
+                              {expandedSections.participants && (
+                                <div className="bg-bg-card outline outline-1 outline-slate-700 rounded-br-lg rounded-bl-lg p-4 mt-0 border-t-0">
+                                  <div className="space-y-3">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center text-white text-xs font-semibold">
+                                        A
+                                      </div>
+                                      <div>
+                                        <p className="text-sm text-white">Admin</p>
+                                        <p className="text-xs text-slate-400">Agente</p>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white text-xs font-semibold">
+                                        E
+                                      </div>
+                                      <div>
+                                        <p className="text-sm text-white">EvolutionAPI</p>
+                                        <p className="text-xs text-slate-400">Cliente</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center bg-bg">
+                <EmptyState
+                  icon={<InboxIcon className="w-12 h-12" />}
+                  title="Selecione uma conversa"
+                  description="Escolha uma conversa da lista para começar a atender seus clientes"
+                  action={{
+                    label: "Ver todas as conversas",
+                    onClick: () => console.log("Ver conversas")
+                  }}
+                />
+              </div>
+            )}
+            )}
+          </div>
+
+          {/* Painel Lateral de Informações da Conversa */}
+          {selectedConversation && showConversationInfo && (
+            <div className="w-80 bg-bg-card border-l border-slate-800 flex flex-col">
+              {/* Header */}
+              <div className="h-16 bg-bg-card border-b border-slate-800 flex items-center justify-between px-4">
+                <h3 className="font-semibold text-white">Info da Conversa</h3>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setShowConversationInfo(false)}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </Button>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                {/* SLA Status */}
+                <div className="space-y-3">
+                  <h4 className="font-medium text-white flex items-center gap-2">
+                    <svg className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
+                    </svg>
+                    SLA Status
+                  </h4>
+                  <div className="bg-slate-800 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-300">Primeira resposta:</span>
+                      <span className="text-sm text-emerald-400 font-medium">✓ Em dia</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-300">Resolução:</span>
+                      <span className="text-sm text-yellow-400 font-medium">2h restantes</span>
+                    </div>
+                    <div className="w-full bg-slate-700 rounded-full h-2 mt-2">
+                      <div className="bg-yellow-400 h-2 rounded-full w-3/4"></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Etiquetas */}
+                <div className="space-y-3">
+                  <h4 className="font-medium text-white flex items-center gap-2">
+                    <svg className="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 5.9 3 7v10c0 1.1.9 2 2 2h11c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16z"/>
+                    </svg>
+                    Etiquetas
+                  </h4>
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded-full text-xs font-medium">
+                        Suporte
+                      </span>
+                      <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-medium">
+                        Ativo
+                      </span>
+                      <span className="px-2 py-1 bg-red-500/20 text-red-400 rounded-full text-xs font-medium">
+                        Urgente
+                      </span>
+                    </div>
+                    <Button variant="outline" size="sm" className="w-full mt-2">
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                      Adicionar Etiqueta
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Assignee */}
+                <div className="space-y-3">
+                  <h4 className="font-medium text-white flex items-center gap-2">
+                    <svg className="w-4 h-4 text-purple-400" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                    </svg>
+                    Responsável
+                  </h4>
+                  <div className="bg-slate-800 rounded-lg p-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full flex items-center justify-center text-white text-xs font-semibold">
+                        JS
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-white">João Silva</p>
+                        <p className="text-xs text-slate-400">Atribuído há 2h</p>
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" className="w-full mt-3">
+                      Alterar Responsável
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Notas */}
+                <div className="space-y-3">
+                  <h4 className="font-medium text-white flex items-center gap-2">
+                    <svg className="w-4 h-4 text-emerald-400" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
+                    </svg>
+                    Notas Internas
+                  </h4>
+                  <div className="space-y-2">
+                    {conversationNotes.length > 0 ? (
+                      conversationNotes.map((note) => (
+                        <div key={note.id} className="bg-slate-800 rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-emerald-400">{note.author}</span>
+                              {note.isPrivate && (
+                                <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 rounded text-xs">
+                                  Privada
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-xs text-slate-400">
+                              {new Date(note.createdAt).toLocaleDateString('pt-BR')}
+                            </span>
+                          </div>
+                          <p className="text-sm text-slate-300">{note.content}</p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-slate-400 text-center py-4">
+                        Nenhuma nota encontrada
+                      </p>
+                    )}
+                    
+                    {/* Nova Nota */}
+                    <div className="space-y-2">
+                      <textarea
+                        value={newNote}
+                        onChange={(e) => setNewNote(e.target.value)}
+                        placeholder="Adicionar nova nota..."
+                        className="w-full p-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-400 text-sm resize-none"
+                        rows={3}
+                      />
+                      <div className="flex items-center justify-between">
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={isPrivateNote}
+                            onChange={(e) => setIsPrivateNote(e.target.checked)}
+                            className="w-4 h-4 text-emerald-600 bg-slate-800 border-slate-600 rounded focus:ring-emerald-500"
+                          />
+                          <span className="text-xs text-slate-300">Nota privada</span>
+                        </label>
+                        <Button 
+                          size="sm"
+                          disabled={!newNote.trim()}
+                          onClick={() => {
+                            if (newNote.trim()) {
+                              setConversationNotes(prev => [...prev, {
+                                id: Date.now(),
+                                content: newNote.trim(),
+                                isPrivate: isPrivateNote,
+                                author: "Você",
+                                createdAt: new Date().toISOString()
+                              }])
+                              setNewNote('')
+                            }
+                          }}
+                        >
+                          Salvar
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </Shell>
+    </ProtectedRoute>
+  )
+}

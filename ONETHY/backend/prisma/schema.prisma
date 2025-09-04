@@ -1,0 +1,283 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    Int                       @id @default(autoincrement())
+  name                  String
+  email                 String                    @unique
+  password              String
+  company               String?
+  role                  String                    @default("user") // admin, agent, user
+  teamId                Int?
+  status                String                    @default("active") // active, inactive
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+  team                  Team?                     @relation(fields: [teamId], references: [id])
+  campaigns             Campaign[]
+  contacts              Contact[]
+  conversations         Conversation[]
+  assignedConversations Conversation[]            @relation("AssignedConversations")
+  messages              Message[]
+  payments              Payment[]
+  sessions              Session[]
+  subscriptions         Subscription[]
+  tickets               SupportTicket[]
+  chatbotFlows          ChatbotFlow[]
+  channels              Channel[]
+  conversationNotes     ConversationNote[]
+  participantIn         ConversationParticipant[]
+  macros                Macro[]
+}
+
+model Session {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  token     String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  provider   String
+  status     String
+  amount     Int
+  externalId String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Message {
+  id             Int          @id @default(autoincrement())
+  userId         Int
+  conversationId Int
+  content        String
+  type           String       @default("text") // text, image, audio, document, video
+  fromMe         Boolean      @default(false)
+  status         String       @default("sent") // sent, delivered, read, failed
+  metadata       Json? // Para dados específicos do tipo (url do arquivo, duração do audio, etc.)
+  whatsappId     String? // ID da mensagem no WhatsApp
+  timestamp      DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+model Plan {
+  id            Int            @id @default(autoincrement())
+  name          String         @unique
+  priceCents    Int
+  interval      String
+  features      Json?
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id               Int       @id @default(autoincrement())
+  userId           Int
+  planId           Int
+  status           String
+  provider         String?
+  providerRef      String?
+  currentPeriodEnd DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  plan             Plan      @relation(fields: [planId], references: [id])
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Contact {
+  id              Int                @id @default(autoincrement())
+  userId          Int
+  name            String
+  phone           String
+  email           String?
+  company         String?
+  tags            String[]
+  status          String             @default("active")
+  source          String             @default("manual")
+  lastInteraction DateTime?
+  totalMessages   Int                @default(0)
+  avatar          String? // URL do avatar
+  metadata        Json? // Dados extras do contato
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversations   Conversation[]
+  attributes      ContactAttribute[]
+
+  @@unique([userId, phone]) // Um contato único por usuário
+  @@map("contacts")
+}
+
+model Conversation {
+  id              Int                       @id @default(autoincrement())
+  userId          Int
+  contactId       Int
+  channelId       Int?
+  status          String                    @default("open") // open, closed, pending
+  priority        String                    @default("normal") // low, normal, high, urgent
+  lastMessage     String?
+  lastActivity    DateTime                  @default(now())
+  unreadCount     Int                       @default(0)
+  assignedAgentId Int?
+  assignedTeamId  Int?
+  tags            String[]
+  metadata        Json? // Dados extras da conversa
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  contact         Contact                   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  user            User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel         Channel?                  @relation(fields: [channelId], references: [id])
+  assignedAgent   User?                     @relation("AssignedConversations", fields: [assignedAgentId], references: [id])
+  assignedTeam    Team?                     @relation(fields: [assignedTeamId], references: [id])
+  messages        Message[]
+  notes           ConversationNote[]
+  participants    ConversationParticipant[]
+
+  @@map("conversations")
+}
+
+model Campaign {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  name          String
+  status        String    @default("draft")
+  totalMessages Int       @default(0)
+  sentMessages  Int       @default(0)
+  deliveryRate  Float     @default(0)
+  openRate      Float     @default(0)
+  scheduledAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SupportTicket {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  subject     String
+  description String
+  status      String   @default("open")
+  priority    String   @default("medium")
+  category    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ChatbotFlow {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  name        String
+  description String?
+  nodes       Json
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Channel {
+  id            Int            @id @default(autoincrement())
+  userId        Int
+  name          String
+  type          String // 'whatsapp' | 'telegram' | 'instagram' | 'email'
+  status        String         @default("disconnected") // 'connected' | 'disconnected' | 'connecting' | 'error'
+  phone         String?
+  webhook       String         @unique @default(cuid()) // Webhook único para cada canal
+  config        Json? // Configurações específicas do canal
+  messagesCount Int            @default(0)
+  lastActivity  DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+}
+
+// Novas tabelas para funcionalidade completa da inbox
+model Team {
+  id            Int            @id @default(autoincrement())
+  name          String
+  description   String?
+  color         String? // Cor para identificação visual
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  members       User[]
+  conversations Conversation[]
+
+  @@map("teams")
+}
+
+model ConversationNote {
+  id             Int          @id @default(autoincrement())
+  conversationId Int
+  userId         Int
+  content        String
+  isInternal     Boolean      @default(true) // Nota interna ou visível para o cliente
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("conversation_notes")
+}
+
+model ConversationParticipant {
+  id             Int          @id @default(autoincrement())
+  conversationId Int
+  userId         Int
+  role           String       @default("participant") // owner, agent, participant
+  joinedAt       DateTime     @default(now())
+  leftAt         DateTime?
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@map("conversation_participants")
+}
+
+model Macro {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  name      String
+  content   String
+  shortcut  String? // Atalho para usar a macro (ex: /info)
+  category  String? // Categoria para organização
+  isActive  Boolean  @default(true)
+  useCount  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("macros")
+}
+
+model ContactAttribute {
+  id        Int      @id @default(autoincrement())
+  contactId Int
+  key       String
+  value     String
+  type      String   @default("text") // text, number, date, boolean
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, key])
+  @@map("contact_attributes")
+}
